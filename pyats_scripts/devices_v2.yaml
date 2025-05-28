@@ -1,0 +1,16 @@
+testbed:
+  name: Lab
+  credentials:
+    default:
+      username: '%ENV{PYATS_USERNAME}'
+      password: '%ENV{PPYATS_PASSWORD}'
+
+devices:
+  er11.test-uk.bllab:
+    os: iosxr
+    type: router
+    connections:
+      cli:
+        ip: 89.200.128.226
+        protocol: ssh
+        port: 22
