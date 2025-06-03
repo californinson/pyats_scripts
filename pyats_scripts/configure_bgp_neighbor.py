@@ -1,52 +1,15 @@
 import logging
 import sys
+from time import sleep
+
 from pyats import aetest
 from pyats.topology import loader  # using loader to handle testbed loading if needed
 from unicon.core.errors import TimeoutError, StateMachineError, ConnectionError
+from genie.libs.parser.iosxr.show_bgp import ShowBgpNeighbors
 import os
-
-# Add custom genie parsers path to the system path
-sys.path.insert(0, 'custom_genie_parsers/')
-
-# Import custom genie parsers (modified genie parsers for BGP)
-from custom_genie_parsers.show_bgp import ShowBgpVrf, ShowBgpAddressFamily
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
-
-# Fix method for IPv6 raw output (concatenates lines for proper parsing)
-def fix_ipv6_raw_output(raw_output):
-    lines = raw_output.splitlines()
-    valid_lines = []
-    previous_line = ""
-    found = False
-    original_text = []
-
-    for line in lines:
-        if 'Route Distinguisher' in line or ('Network' in line and 'Metric' in line):
-            original_text.append(line)
-            found = True
-            continue
-        else:
-            if not found:
-                original_text.append(line)
-
-        if found:
-            line = line.rstrip()
-            if line.startswith('*'):
-                if previous_line:
-                    valid_lines.append(previous_line)
-                previous_line = line
-            else:
-                if 'Processed' not in line:
-                    previous_line += " " + line.strip()
-
-    if previous_line:
-        valid_lines.append(previous_line)
-
-    original_text = "\n".join(original_text)
-    valid_lines = "\n".join(valid_lines)
-    return original_text + '\n' + valid_lines
 
 class CommonSetup(aetest.CommonSetup):
     @aetest.subsection
@@ -96,10 +59,10 @@ class CommonSetup(aetest.CommonSetup):
             # Mark the setup as failed if connection fails
             self.failed(f"Failed to connect to device {host}: {e}")
 
-class BgpTable(aetest.Testcase):
+class ConfigureBGPNeighbor(aetest.Testcase):
     """Testcase to retrieve and verify BGP routing table information."""
     @aetest.setup
-    def setup(self, device, vrf, filter):
+    def verify_bgp_neighbors(self, device, vrf, filter, neighbor_ip):
         """Execute BGP show command and parse the output."""
         try:
             # Normalize address-family filter string
@@ -108,60 +71,92 @@ class BgpTable(aetest.Testcase):
 
             # Construct the appropriate show command based on VRF and filter
             if 'ipv4' in filter:
-                command = f"show bgp vrf {vrf}" if vrf else "show bgp"
+                command = f"show bgp vrf {vrf} neighbors" if vrf else "show bgp neighbors"
             else:
-                command = f"show bgp {filter} vrf {vrf}" if vrf else f"show bgp {filter}"
+                command = f"show bgp {filter} vrf {vrf} neighbors" if vrf else f"show bgp {filter} neighbors"
 
             logger.info(f"Executing command on device {device.name}: {command}")
             raw_output = device.execute(command)
             logger.info(f"Raw output received from {device.name}:\n{raw_output}")
 
-            # Check if raw_output is empty (indicating BGP may be down)
+            # Check if raw_output is empty (indicating an error with the device)
             if not raw_output.strip():
-                self.failed(f"BGP table is empty, likely due to BGP being down on the device.")
-
-            # If IPv6 address-family, fix the raw output formatting for parsing
-            if 'v6' in filter:
-                raw_output = fix_ipv6_raw_output(raw_output)
+                self.failed(f"No response from the device, likely due to communication being down.")
 
             # Parse the raw output using the appropriate Genie parser
-            if 'vrf' not in command:
-                parser = ShowBgpAddressFamily(device=device)
-            else:
-                parser = ShowBgpVrf(device=device)
-            parsed_output = parser.parse(output=raw_output)
+            bgp_neighbors = ShowBgpNeighbors(device=device)
+            parsed_output = bgp_neighbors.parse(output=raw_output)
             logger.info(f"Parsed output: {parsed_output}")
 
+            # Check if any of the neighbors already exist
+            if (vrf):
+                vrf_item = vrf
+            else:
+                vrf_item = 'default'
+
+            existing_neighbors = parsed_output.get("instance", {}).get("all", {}).get("vrf", {}).get(vrf_item, {}).get(
+                "neighbor", {})
+
+            if neighbor_ip in existing_neighbors:
+                logger.info(f"BGP neighbor {neighbor_ip} already exists.")
+                return
+
             # Store parsed output in parameters for use in test step
-            self.parent.parameters.update(parsed_output=parsed_output)
+            self.parent.parameters.update(command=command)
+            self.parent.parameters.update(vrf_item=vrf_item)
         except Exception as e:
-            logger.error(f"Error processing BGP table: {e}")
+            logger.error(f"Error processing BGP neighbors: {e}")
             # Fail the testcase setup if parsing or execution fails
-            self.failed(f"Setup failed: unable to get BGP table - {e}")
+            self.failed(f"Setup failed: unable to get BGP neighbors - {e}")
 
     @aetest.test
-    def verify_bgp_table(self, parsed_output):
-        """Verify or extract information from the parsed BGP table."""
-        extracted_data = []
+    def add_neighbor_config(self, device, neighbor_ip, bgp_neighbor_data, command, vrf_item):
         try:
-            # Iterate over parsed BGP data to extract relevant fields
-            for af, af_data in parsed_output.items():
-                if 'prefix' in af_data:
-                    for prefix, details in af_data['prefix'].items():
-                        for idx, info in details.get('index', {}).items():
-                            extracted_data.append({
-                                'network': prefix,
-                                'next_hop': info.get('next_hop', ''),
-                                'metric': info.get('metric', ''),
-                                'status_codes': info.get('status_codes', ''),
-                                'path': info.get('origin_codes', '?'),
-                                'locprf': info.get('locprf', ''),
-                                'weight': info.get('weight', '')
-                            })
-            logger.info(f"Extracted BGP routes data: {extracted_data}")
+            """Verify or extract information from the parsed BGP table."""
+            logger.info(f"Adding new BGP neighbor {neighbor_ip}")
+
+            config_commands=bgp_neighbor_data.split('/')
+
+            logger.info(f"New config is{bgp_neighbor_data}")
+
+            device.configure(config_commands)
+            logger.info(f"Configuration added on the device. Checking if new neighbor is loaded...")
+
+            found=False
+            attempts=0
+            while(not found or attempts<=3):
+                logger.info(f"Attempt #{attempts}")
+
+                logger.info(f"      Executing command on device {device.name}: {command}")
+                raw_output = device.execute(command)
+                logger.info(f"      Raw output received from {device.name}:\n{raw_output}")
+
+                # Check if raw_output is empty (indicating an error with the device)
+                if not raw_output.strip():
+                    self.failed(f"      No response from the device, likely due to communication being down.")
+
+                # Parse the raw output using the appropriate Genie parser
+                bgp_neighbors = ShowBgpNeighbors(device=device)
+                parsed_output = bgp_neighbors.parse(output=raw_output)
+
+                existing_neighbors = parsed_output.get("instance", {}).get("all", {}).get("vrf", {}).get(vrf_item, {}).get(
+                    "neighbor", {})
+
+                if neighbor_ip in existing_neighbors:
+                    found=True
+
+                attempts+=1
+                sleep(2)
+
+            if found:
+                logger.info(f"New neighbor {neighbor_ip} was configured successfully")
+            else:
+                logger.error(f"New neighbor {neighbor_ip} was NOT configured. Please try again.")
+                self.failed(f"New neighbor {neighbor_ip} was NOT configured. Please try again.")
+
         except Exception as e:
-            logger.error(f"Error extracting data from BGP table: {e}")
-            self.failed(f"Test failed while extracting BGP data: {e}")
+            logger.error(f"Error while adding new BGP neighbor configuration: {e}")
+            self.failed(f"Error while adding new BGP neighbor configuration: {e}")
 
 class CommonCleanup(aetest.CommonCleanup):
     @aetest.subsection
