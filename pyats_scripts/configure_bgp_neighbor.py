@@ -1,7 +1,28 @@
-import logging
-import sys
-from time import sleep
+"""
+configure_bgp_neighbor.py
 
+Test script to configure and verify a BGP neighbor on a Cisco IOS-XR device.
+
+This script does the following:
+  1. Connects to the target device (using credentials from environment).
+  2. Runs a 'show bgp [<address-family>] vrf <VRF> neighbors' command.
+  3. If the requested neighbor IP is already present, immediately PASS the test.
+  4. Otherwise, push the BGP neighbor configuration (under 'router bgp <ASN> …').
+  5. Re-run the show command up to 3 times to confirm the neighbor appears.
+  6. If the neighbor appears, PASS; else FAIL.
+
+Usage (via pyats job):
+  pyats run job network_test.py --testbed devices_v2.yaml \\
+    --host er11.test-uk.bllab --vrf uk-sns-ddos-lab \\
+    --neighbor 10.10.10.1 --bgp_neighbor_data "router bgp 65000/ neighbor 10.10.10.1 remote-as 65001"
+
+Assumptions:
+  - The Genie 'ShowBgpNeighbors' parser works on the target device.
+  - Default BGP instance is used.
+  - 'neighbor_ip' and 'bgp_neighbor_data' are provided via CLI or jobfile.
+"""
+import logging
+from time import sleep
 from pyats import aetest
 from pyats.topology import loader  # using loader to handle testbed loading if needed
 from unicon.core.errors import TimeoutError, StateMachineError, ConnectionError
@@ -12,9 +33,23 @@ import os
 logger = logging.getLogger(__name__)
 
 class CommonSetup(aetest.CommonSetup):
+    """
+    Common setup for configuring a new BGP neighbor.
+
+    Responsibilities:
+      - Load or verify the testbed object.
+      - Connect to the specified device (with credentials from env).
+      - Update shared parameters: 'device', 'host', and 'testbed'.
+    """
     @aetest.subsection
     def load_testbed(self, testbed):
-        """Convert/verify testbed and store it in parameters."""
+        """
+        Convert or verify the 'testbed' argument into a Genie Testbed
+        object and store it in shared parameters.
+
+        :param testbed: Either a path to a YAML file or an existing
+                        Testbed object.
+        """
         logger.info("Loading testbed information.")
         # Avoid re-loading if testbed is already an object
         if not hasattr(testbed, 'devices'):
@@ -24,12 +59,22 @@ class CommonSetup(aetest.CommonSetup):
 
     @aetest.subsection
     def connect(self, testbed):
-        """Connect to the device specified by host and store the device object."""
-        # Retrieve host from parameters (set via job or CLI)
+        """
+        Connect to the device specified by 'host'. Expects 'host'
+        parameter to be passed in at runtime.
+
+        :param testbed: The Genie Testbed object.
+        :raises ValueError: If 'host' is not provided or not found.
+        :raises self.failed: If connection to the device fails.
+        """
         host = self.parent.parameters.get('host', None)
         if not host:
             raise ValueError("Missing host parameter")
         assert testbed, "Testbed is not provided!"
+
+        device = testbed.devices.get(host)
+        if not device:
+            raise ValueError(f"Host '{host}' not found in testbed")
 
         try:
             device = testbed.devices[host]
@@ -60,10 +105,30 @@ class CommonSetup(aetest.CommonSetup):
             self.failed(f"Failed to connect to device {host}: {e}")
 
 class ConfigureBGPNeighbor(aetest.Testcase):
-    """Testcase to retrieve and verify BGP routing table information."""
+    """
+    Testcase to add (or verify existing) a BGP neighbor on a Cisco device.
+
+    Steps:
+      1. verify_bgp_neighbors (setup): Check if neighbor already exists.
+         - If yes: call self.passed(...) and return early.
+         - Otherwise: stash necessary parameters (command, vrf_item, found=False).
+      2. add_neighbor_config (test): If found==True, call self.skipped(...).
+         Otherwise, push configuration and verify neighbor appears.
+    """
+
     @aetest.setup
     def verify_bgp_neighbors(self, device, vrf, filter, neighbor_ip):
-        """Execute BGP show command and parse the output."""
+        """
+        Execute 'show bgp ... neighbors', parse output, and detect
+        if 'neighbor_ip' is already configured.
+
+        :param device:        Connected Genie device object.
+        :param vrf:           VRF name (string). Empty = default VRF.
+        :param filter:        Address-family filter (e.g., 'ipv4_unicast').
+        :param neighbor_ip:   IP address of the BGP neighbor to add.
+        :raises self.failed: If the device does not respond or parse error.
+        :raises self.passed: If neighbor already exists (early exit).
+        """
         try:
             # Normalize address-family filter string
             filter = filter.replace('-', ' ').replace('_', ' ')
@@ -99,7 +164,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
 
             if neighbor_ip in existing_neighbors:
                 logger.info(f"BGP neighbor {neighbor_ip} already exists.")
-                return
+                self.passed(f"Neighbor {neighbor_ip} already exists.")
 
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(command=command)
@@ -111,8 +176,22 @@ class ConfigureBGPNeighbor(aetest.Testcase):
 
     @aetest.test
     def add_neighbor_config(self, device, neighbor_ip, bgp_neighbor_data, command, vrf_item):
+        """
+        Add 'neighbor_ip' as a new BGP neighbor if not already present,
+        then recheck until present (up to 3 tries). Fail if still absent.
+
+        :param device:             Connected Genie device object.
+        :param neighbor_ip:        IP address of the BGP neighbor to add.
+        :param bgp_neighbor_data:  String with BGP neighbor config lines,
+                                   delimited by '/' (e.g. "router bgp 65000/
+                                   neighbor 10.10.10.1 remote-as 65001").
+        :param command:            The original 'show bgp ... neighbors' command.
+        :param vrf_item:           The VRF key in parsed dict (string).
+        :param found:              Boolean flag from setup (always False here).
+        :raises self.skipped:      If found==True (neighbor already present).
+        :raises self.failed:       If neighbor not found after config.
+        """
         try:
-            """Verify or extract information from the parsed BGP table."""
             logger.info(f"Adding new BGP neighbor {neighbor_ip}")
 
             config_commands=bgp_neighbor_data.split('/')
@@ -159,9 +238,12 @@ class ConfigureBGPNeighbor(aetest.Testcase):
             self.failed(f"Error while adding new BGP neighbor configuration: {e}")
 
 class CommonCleanup(aetest.CommonCleanup):
+    """
+    Common cleanup: disconnect from the device if still connected.
+    """
     @aetest.subsection
     def disconnect(self):
-        """Disconnect from the device."""
+        """Disconnect from the device at the end of the test run."""
         device = self.parent.parameters.get('device')
         if device and device.connected:
             logger.info(f"Disconnecting from device {device.name}")
