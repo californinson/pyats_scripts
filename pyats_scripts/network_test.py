@@ -13,6 +13,7 @@ def main(runtime):
     vrf = ''
     filter_af = 'ipv4_unicast'
     testbed_path = None
+    neighbor_ip=None
 
     # Check if the testbed is already loaded by runtime (provided via --testbed)
     testbed = getattr(runtime, 'testbed', None)
@@ -34,6 +35,8 @@ def main(runtime):
             vrf = argv[i + 1]
         elif arg == '--filter' and i + 1 < len(argv):
             filter_af = argv[i + 1]
+        elif arg == '--neighbor' and i + 1 < len(argv):
+            neighbor_ip=argv[i + 1]
 
     # Load testbed from file path if it wasn't already loaded
     if testbed is None:
@@ -55,4 +58,19 @@ def main(runtime):
         host=host,
         vrf=vrf,
         filter=filter_af
+    )
+
+    if(not neighbor_ip):
+        raise Exception("Neighbor IP not provided. Skipping new neighbor configuration. Use --neighbor <neighbor_ip> "
+                        "to specify the new BGP neighbor.")
+
+    run(
+        testscript=os.path.join(SCRIPT_PATH, "configure_bgp_neighbor.py"),
+        runtime=runtime,
+        taskid="New BGP Neighbor",
+        testbed=testbed,
+        host=host,
+        vrf=vrf,
+        filter=filter_af,
+        neighbor_ip=neighbor_ip
     )
