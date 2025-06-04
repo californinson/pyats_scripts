@@ -196,7 +196,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
 
             config_commands=bgp_neighbor_data.split('/')
 
-            logger.info(f"New config is{bgp_neighbor_data}")
+            logger.info(f"New config is {config_commands}")
 
             device.configure(config_commands)
             logger.info(f"Configuration added on the device. Checking if new neighbor is loaded...")
@@ -208,7 +208,6 @@ class ConfigureBGPNeighbor(aetest.Testcase):
 
                 logger.info(f"      Executing command on device {device.name}: {command}")
                 raw_output = device.execute(command)
-                logger.info(f"      Raw output received from {device.name}:\n{raw_output}")
 
                 # Check if raw_output is empty (indicating an error with the device)
                 if not raw_output.strip():
