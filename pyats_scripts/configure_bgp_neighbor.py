@@ -223,7 +223,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
                 if neighbor_ip in existing_neighbors:
                     found=True
 
-                attempts+=1
+                attempts=attempts+1
                 sleep(2)
 
             if found:
