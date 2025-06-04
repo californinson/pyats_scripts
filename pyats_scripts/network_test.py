@@ -38,6 +38,8 @@ def main(runtime):
             filter_af = argv[i + 1]
         elif arg == '--neighbor' and i + 1 < len(argv):
             neighbor_ip=argv[i + 1]
+        elif arg == '--bgp_neighbor_data' and i + 1 < len(argv):
+            bgp_neighbor_data=argv[i + 1]
 
     # Load testbed from file path if it wasn't already loaded
     if testbed is None:
