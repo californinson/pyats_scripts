@@ -203,7 +203,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
 
             found=False
             attempts=0
-            while(not found or attempts<=3):
+            while(not found and attempts<=3):
                 logger.info(f"Attempt #{attempts}")
 
                 logger.info(f"      Executing command on device {device.name}: {command}")
