@@ -229,12 +229,43 @@ class ConfigureBGPNeighbor(aetest.Testcase):
             if found:
                 logger.info(f"New neighbor {neighbor_ip} was configured successfully")
             else:
-                logger.error(f"New neighbor {neighbor_ip} was NOT configured. Please try again.")
-                self.failed(f"New neighbor {neighbor_ip} was NOT configured. Please try again.")
+                logger.error(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
+                logger.error(f"Neighbour {neighbor_ip} NOT present after {attempts} attempts – rolling back.")
+                self.failed(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
 
         except Exception as e:
             logger.error(f"Error while adding new BGP neighbor configuration: {e}")
             self.failed(f"Error while adding new BGP neighbor configuration: {e}")
+
+    def _rollback_neighbor_config(self, device, config_commands, neighbor_ip):
+        """
+        Remove the neighbour that has just been configured.
+
+        We assume `config_commands` looks like:
+            ['router bgp <asn>', 'vrf <vrf-name>', 'neighbor <ip> ...']
+
+        Only the `neighbor` line(s) get negated; contextual lines
+        (router bgp / vrf) are replayed unchanged so IOS-XR remains in
+        the correct sub-mode.
+        """
+        try:
+            rollback_cmds = []
+            for line in config_commands:
+                if line.lstrip().startswith("neighbor"):
+                    # IOS-XR: removing an entire neighbour only needs the IP
+                    nbr = line.split()[1]
+                    rollback_cmds.append(f"no neighbor {nbr}")
+                else:
+                    rollback_cmds.append(line)
+
+            logger.warning(f"Rollback triggered – removing neighbour {neighbor_ip}")
+
+            device.configure(rollback_cmds)
+        except Exception as exc:
+            # We don’t fail the test *again* here – we just log;
+            # the original failure will be reported by add_neighbor_config().
+            logger.error(f"Rollback failed: {exc}")
+
 
 class CommonCleanup(aetest.CommonCleanup):
     """
