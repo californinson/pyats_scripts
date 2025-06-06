@@ -202,7 +202,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
             logger.info(f"Configuration added on the device. Checking if new neighbor is loaded...")
 
             found=False
-            attempts=0
+            attempts=1
             while(not found and attempts<=3):
                 logger.info(f"Attempt #{attempts}")
 
@@ -231,6 +231,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
             else:
                 logger.error(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
                 logger.error(f"Neighbour {neighbor_ip} NOT present after {attempts} attempts – rolling back.")
+                self._rollback_neighbor_config(device, config_commands, neighbor_ip)
                 self.failed(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
 
         except Exception as e:
