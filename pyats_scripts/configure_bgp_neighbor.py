@@ -230,7 +230,7 @@ class ConfigureBGPNeighbor(aetest.Testcase):
                 logger.info(f"New neighbor {neighbor_ip} was configured successfully")
             else:
                 logger.error(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
-                logger.error(f"Neighbour {neighbor_ip} NOT present after {attempts} attempts – rolling back.")
+                logger.error(f"Neighbour {neighbor_ip} NOT present after {attempts-1} attempts – rolling back.")
                 self._rollback_neighbor_config(device, config_commands, neighbor_ip)
                 self.failed(f"New neighbor {neighbor_ip} was NOT configured properly. Check the input configuration and try again.")
 
