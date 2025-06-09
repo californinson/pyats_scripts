@@ -4,6 +4,7 @@ from pyats import aetest
 from pyats.topology import loader  # using loader to handle testbed loading if needed
 from unicon.core.errors import TimeoutError, StateMachineError, ConnectionError
 import os
+from AiAgent import AIAgent
 
 # Add custom genie parsers path to the system path
 sys.path.insert(0, 'custom_genie_parsers/')
@@ -59,6 +60,10 @@ class CommonSetup(aetest.CommonSetup):
         self.parent.parameters.update(testbed=testbed)
         assert testbed, "Testbed is not provided!"
 
+        # create ai agent instance
+        ai_agent = AIAgent()
+        self.parent.parameters.update(ai_agent=ai_agent)
+
     @aetest.subsection
     def connect(self, testbed):
         """Connect to the device specified by host and store the device object."""
@@ -79,6 +84,8 @@ class CommonSetup(aetest.CommonSetup):
                     'username': username,
                     'password': password
                 }
+
+                self.parent.parameters.update(device_user=username)
 
             # Connect to the device
             device.connect(
@@ -132,6 +139,27 @@ class BgpTable(aetest.Testcase):
             parsed_output = parser.parse(output=raw_output)
             logger.info(f"Parsed output: {parsed_output}")
 
+            ai_agent = self.parent.parameters.get('ai_agent')
+            device_user=self.parent.parameters.get('device_user')
+
+            prompt="Analyse and do an health check of this BGP table from an IOS XR device."
+            #call ai agent generate class to analyse bgp table
+            ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
+                                                       raw_output=raw_output, prompt=prompt)
+
+            if(ok):
+                ok, final_analysis=ai_agent.get_final_response(device=device.name,user=device_user)
+
+                if(ok):
+                    logger.info("🔎 AI summary:\n%s", final_analysis)
+                    # Store AI final analysis in parameters for use in cleanup step
+                    self.parent.parameters.update(final_analysis=final_analysis)
+                else:
+                    logger.error(f"AI analysis failed: {final_analysis}\n")
+                    self.parent.parameters.update(final_analysis=None)
+            else:
+                logger.error(f"AI summary failed: {raw_output_summary}\n")
+
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(parsed_output=parsed_output)
         except Exception as e:
@@ -171,3 +199,17 @@ class CommonCleanup(aetest.CommonCleanup):
         if device and device.connected:
             logger.info(f"Disconnecting from device {device.name}")
             device.disconnect()
+
+    @aetest.subsection
+    def ai_summary_to_text(self):
+        #read final analysis
+        final_analysis = self.parent.parameters.get('final_analysis')
+        host = self.parent.parameters.get('host', "")
+
+        if(final_analysis!= None):
+            try:
+                with open(f"{host}_BGP_Table_AI_Summary.txt", "w") as f:
+                    f.write("AI GENERATED ANALYSIS\n\n\n")
+                    f.write(final_analysis)
+            except Exception as e:
+                logger.error(f"Error while saving AI response to text file: {e}")
