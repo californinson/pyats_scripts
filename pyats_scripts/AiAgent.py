@@ -142,6 +142,7 @@ class AIAgent:
         self.logger.info("Processing %d chunk(s) for user=%s, device=%s", len(chunks), user, device)
 
         try:
+
             for idx, chunk in enumerate(chunks, 1):
                 prompt = self._prepare_payload(prompt, raw_output) + f" (part {idx}/{len(chunks)}):\n{chunk}"
                 output = self._request_ai(prompt)

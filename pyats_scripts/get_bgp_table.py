@@ -146,7 +146,7 @@ class BgpTable(aetest.Testcase):
             #Read ai agent parameter from parent.parameters
             ai_agent = self.parent.parameters.get('ai_agent')
 
-            device_user=self.parent.parameters.get('device_user')
+            device_user=self.parent.parameters.get('device_user','unknown')
 
             prompt="Analyse and do an health check of this BGP table.\n"
 
