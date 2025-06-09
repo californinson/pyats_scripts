@@ -63,7 +63,7 @@ class CommonSetup(aetest.CommonSetup):
         # create ai agent instance
         system_prompt=(
             "### Role: You are a senior network engineer.\n"
-            "### Task: Evaluate and summarize network output from a Cisco IOS XR device.\n\n"
+            "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
         )
         ai_agent = AIAgent(system_prompt=system_prompt)
         self.parent.parameters.update(ai_agent=ai_agent)
@@ -148,7 +148,7 @@ class BgpTable(aetest.Testcase):
 
             device_user=self.parent.parameters.get('device_user','unknown')
 
-            prompt="Analyse and do an health check of this BGP table.\n"
+            prompt="Analyse and do a health check of this BGP table."
 
             #call ai agent generate class to analyse bgp table
             ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,

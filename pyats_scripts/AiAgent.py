@@ -34,143 +34,120 @@ from typing import Dict, List, Tuple
 __all__ = ["AIAgent", "AIAgentError"]
 
 RUNPOD_URL_DEFAULT = "http://<runpod-host>:8000"
-
-# In‑memory cache → {user: {device: {"summary": [str, …]}}}
-_DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
-
-DEFAULT_SYSTEM_PROMPT=(
+DEFAULT_SYSTEM_PROMPT = (
     "### Role: You are a senior network engineer.\n"
-    "### Task: Evaluate and summarize network-device output.\n\n"
+    "### Task: Evaluate and summarise network-device output.\n\n"
 )
 
+# in-memory cache  user → device → { "summary": [...] }
+_DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
+
+
 class AIAgentError(RuntimeError):
-    """Raised when communication with the LLM back‑end fails."""
+    """Raised when communication with the LLM back-end fails."""
 
 
 class AIAgent:
-    """Utility class that orchestrates prompt chunking & summarisation."""
+    """Send log chunks to an LLM service and keep the intermediate summaries."""
 
-    #: Approximate chunk size (tokens ~= ¾ characters for latin texts).
-    CHUNK_CHAR_LEN = 1500
-    #: Number of tokens requested for each generation step.
+    CHUNK_CHAR_LEN = 1_500          # ≈ 2 kB – safe for 512 tokens/model-context
     MAX_NEW_TOKENS = 512
 
-    def __init__(self, timeout: int = 30, system_prompt: str | None = None) -> None:
+    # --------------------------------------------------------------------- #
+    # constructor & helpers                                                 #
+    # --------------------------------------------------------------------- #
+    def __init__(self, *, timeout: int = 30, system_prompt: str | None = None) -> None:
         self.base_url = RUNPOD_URL_DEFAULT.rstrip("/")
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
-        # Configure logger once per class (idempotent)
         self.logger = logging.getLogger(self.__class__.__name__)
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            fmt = "%(asctime)s [%(levelname)s] %(name)s – %(message)s"
-            handler.setFormatter(logging.Formatter(fmt))
-            self.logger.addHandler(handler)
-        # Let pyATS / root logger decide the effective level; default INFO for standalone use.
+        if not self.logger.handlers:  # keeps idempotent if the module is re-loaded
+            h = logging.StreamHandler()
+            h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s – %(message)s"))
+            self.logger.addHandler(h)
         self.logger.setLevel(logging.INFO)
 
-    # ---------------------------------------------------------------------
-    # Internal helpers
-    # ---------------------------------------------------------------------
-    def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
-        """Send *prompt* to the /generate endpoint and return generated text.
+    def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
+        """Compose the final prompt (`system` + user + chunk)."""
+        return f"{self.system_prompt}{user_prompt}\n\n{chunk}"
 
-        Raises
-        ------
-        AIAgentError
-            If the HTTP request fails or the response JSON doesn’t contain an
-            ``output`` field.
-        """
+    def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
         max_tokens = max_tokens or self.MAX_NEW_TOKENS
         url = f"{self.base_url}/generate"
-        payload = {"prompt": prompt, "max_new_tokens": int(max_tokens)}
+        payload = {"prompt": prompt, "max_new_tokens": max_tokens}
 
-        self.logger.info("Sending prompt to %s (≈%d chars, max_tokens=%s)", url, len(prompt), max_tokens)
-        start_ts = time.perf_counter()
+        self.logger.info("POST %s – len(prompt)=%d, max_tokens=%s", url, len(prompt), max_tokens)
+        start = time.perf_counter()
         try:
             resp = requests.post(url, json=payload, timeout=self.timeout)
         except requests.RequestException as exc:
-            self.logger.error("HTTP request failed: %s", exc)
-            raise AIAgentError("Failed to reach language‑model API") from exc
+            self.logger.error("HTTP error contacting LLM API: %s", exc)
+            raise AIAgentError("Network error talking to LLM API") from exc
 
-        duration = (time.perf_counter() - start_ts) * 1000
-        self.logger.info("Received response in %.1f ms [status=%s]", duration, resp.status_code)
+        rtt = (time.perf_counter() - start) * 1_000
+        self.logger.info("LLM answered HTTP %s in %.1f ms", resp.status_code, rtt)
 
         if resp.status_code != 200:
-            self.logger.error("Non‑200 response from API: %s – %s", resp.status_code, resp.text[:200])
-            raise AIAgentError(f"API returned HTTP {resp.status_code}")
+            raise AIAgentError(f"LLM API returned HTTP {resp.status_code}: {resp.text[:120]}")
 
         data = resp.json()
         if "output" not in data:
-            self.logger.error("API JSON missing 'output' field: %s", data)
-            raise AIAgentError("Malformed API response – missing 'output'")
+            raise AIAgentError("LLM API JSON missing 'output' field")
 
         return str(data["output"])
 
-    # ------------------------------------------------------------------
-    # Cache helpers
-    # ------------------------------------------------------------------
+    # --------------------------------------------------------------------- #
+    # cache utilities                                                       #
+    # --------------------------------------------------------------------- #
     def _ensure_cache(self, user: str, device: str) -> List[str]:
-        """Return *modifiable* summary list for *user/device*."""
         if user not in _DEVICE_CACHE:
             _DEVICE_CACHE[user] = {}
         if device not in _DEVICE_CACHE[user]:
             _DEVICE_CACHE[user][device] = {"summary": []}
         return _DEVICE_CACHE[user][device]["summary"]
 
-    # ------------------------------------------------------------------
-    # Prompt helpers
-    # ------------------------------------------------------------------
-    def _prepare_payload(self, prompt, raw_output):
-        return self.system_prompt + prompt + raw_output
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    # --------------------------------------------------------------------- #
+    # public API                                                            #
+    # --------------------------------------------------------------------- #
     def generate(self, *, device: str, user: str, raw_output: str, prompt: str) -> Tuple[bool, str]:
-        """Chunk *raw_output*, send each chunk for summarisation, and cache results.
+        """Send **each chunk** of *raw_output* to the LLM.
 
-        Returns
-        -------
-        tuple
-            ``(True, "<last_chunk_summary>")`` on success, or ``(False, "<reason>")`` on failure.
+        Returns ``(True, last_chunk_summary)`` on success or ``(False, reason)``.
         """
         summaries = self._ensure_cache(user, device)
         chunks = wrap(raw_output, self.CHUNK_CHAR_LEN)
 
-        self.logger.info("Processing %d chunk(s) for user=%s, device=%s", len(chunks), user, device)
+        self.logger.info("Analysing %d chunk(s) for user=%s device=%s", len(chunks), user, device)
 
         try:
-
             for idx, chunk in enumerate(chunks, 1):
-                prompt = self._prepare_payload(prompt, raw_output) + f" (part {idx}/{len(chunks)}):\n{chunk}"
-                output = self._request_ai(prompt)
+                full_prompt = self._prepare_payload(
+                    f"{prompt} (part {idx}/{len(chunks)})", chunk
+                )
+                output = self._request_ai(full_prompt)
                 summaries.append(output)
-                self.logger.debug("Chunk %s summary length=%d", idx, len(output))
+                self.logger.debug("Chunk %s → summary %d chars", idx, len(output))
         except AIAgentError as exc:
             return False, str(exc)
 
         return True, summaries[-1] if summaries else ""
 
     def get_final_response(self, *, device: str, user: str) -> Tuple[bool, str]:
-        """Combine cached chunk‑summaries into a single report using the LLM.
-
-        Returns ``(ok, summary)`` where *ok* is *False* if the API request fails.
-        """
+        """Ask the LLM to merge the intermediate summaries into a concise report."""
         summaries = self._ensure_cache(user, device)
         if not summaries:
-            msg = "No intermediate summaries found; call generate() first."
+            msg = "No intermediate summaries found – call generate() first."
             self.logger.warning(msg)
             return False, msg
 
         try:
-            prompt = (
-                "Combine these summaries into a concise report for a network‑engineering audience:\n\n"
+            merge_prompt = (
+                "Combine these partial summaries into a single, concise report "
+                "for a network-engineering audience:\n\n"
                 + "\n---\n".join(summaries)
             )
-            final_summary = self._request_ai(prompt)
+            final = self._request_ai(self._prepare_payload(merge_prompt, ""))
+            return True, final
         except AIAgentError as exc:
             return False, str(exc)
-
-        return True, final_summary
