@@ -38,6 +38,10 @@ RUNPOD_URL_DEFAULT = "http://<runpod-host>:8000"
 # In‑memory cache → {user: {device: {"summary": [str, …]}}}
 _DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
 
+DEFAULT_SYSTEM_PROMPT=(
+    "### Role: You are a senior network engineer.\n"
+    "### Task: Evaluate and summarize network-device output.\n\n"
+)
 
 class AIAgentError(RuntimeError):
     """Raised when communication with the LLM back‑end fails."""
@@ -51,9 +55,10 @@ class AIAgent:
     #: Number of tokens requested for each generation step.
     MAX_NEW_TOKENS = 512
 
-    def __init__(self, timeout: int = 30) -> None:
+    def __init__(self, timeout: int = 30, system_prompt: str | None = None) -> None:
         self.base_url = RUNPOD_URL_DEFAULT.rstrip("/")
         self.timeout = timeout
+        self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
         # Configure logger once per class (idempotent)
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -115,6 +120,12 @@ class AIAgent:
         return _DEVICE_CACHE[user][device]["summary"]
 
     # ------------------------------------------------------------------
+    # Prompt helpers
+    # ------------------------------------------------------------------
+    def _prepare_payload(self, prompt, raw_output):
+        return self.system_prompt + prompt + raw_output
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
     def generate(self, *, device: str, user: str, raw_output: str, prompt: str) -> Tuple[bool, str]:
@@ -132,7 +143,7 @@ class AIAgent:
 
         try:
             for idx, chunk in enumerate(chunks, 1):
-                prompt = prompt + f" (part {idx}/{len(chunks)}):\n{chunk}"
+                prompt = self._prepare_payload(prompt, raw_output) + f" (part {idx}/{len(chunks)}):\n{chunk}"
                 output = self._request_ai(prompt)
                 summaries.append(output)
                 self.logger.debug("Chunk %s summary length=%d", idx, len(output))

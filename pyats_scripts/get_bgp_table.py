@@ -61,7 +61,11 @@ class CommonSetup(aetest.CommonSetup):
         assert testbed, "Testbed is not provided!"
 
         # create ai agent instance
-        ai_agent = AIAgent()
+        system_prompt=(
+            "### Role: You are a senior network engineer.\n"
+            "### Task: Evaluate and summarize network output from a Cisco IOS XR device.\n\n"
+        )
+        ai_agent = AIAgent(system_prompt=system_prompt)
         self.parent.parameters.update(ai_agent=ai_agent)
 
     @aetest.subsection
@@ -139,10 +143,13 @@ class BgpTable(aetest.Testcase):
             parsed_output = parser.parse(output=raw_output)
             logger.info(f"Parsed output: {parsed_output}")
 
+            #Read ai agent parameter from parent.parameters
             ai_agent = self.parent.parameters.get('ai_agent')
+
             device_user=self.parent.parameters.get('device_user')
 
-            prompt="Analyse and do an health check of this BGP table from an IOS XR device."
+            prompt="Analyse and do an health check of this BGP table.\n"
+
             #call ai agent generate class to analyse bgp table
             ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
                                                        raw_output=raw_output, prompt=prompt)
@@ -208,8 +215,11 @@ class CommonCleanup(aetest.CommonCleanup):
 
         if(final_analysis!= None):
             try:
-                with open(f"{host}_BGP_Table_AI_Summary.txt", "w") as f:
-                    f.write("AI GENERATED ANALYSIS\n\n\n")
-                    f.write(final_analysis)
+                summary_path = os.path.join(self.parent.runtime.directory,
+                                                f"{host}_bgp_summary.txt")
+                with open(summary_path, "w") as fp:
+                    fp.write(final_analysis)
+                    logger.info("AI summary written to %s", summary_path)
+
             except Exception as e:
                 logger.error(f"Error while saving AI response to text file: {e}")
