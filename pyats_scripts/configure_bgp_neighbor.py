@@ -89,7 +89,7 @@ class CommonSetup(aetest.CommonSetup):
                 }
 
             # Connect to the device
-            device.connect(
+            device.connect_testbed(
                 timeout=60,
                 log_stdout=False,
                 init_exec_commands=[],

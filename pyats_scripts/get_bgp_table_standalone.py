@@ -61,7 +61,7 @@ class CommonSetup(aetest.CommonSetup):
         device = tb.devices.get(host)
         assert device, f"Host '{host}' not found in testbed"
         try:
-            device.connect(
+            device.connect_testbed(
                 timeout=60,
                 log_stdout=False,
                 init_exec_commands=[],
