@@ -89,7 +89,7 @@ class CommonSetup(aetest.CommonSetup):
                 }
 
             # Connect to the device
-            device.connect_testbed(
+            device.connect(
                 timeout=60,
                 log_stdout=False,
                 init_exec_commands=[],
@@ -274,8 +274,12 @@ class CommonCleanup(aetest.CommonCleanup):
     """
     @aetest.subsection
     def disconnect(self):
-        """Disconnect from the device at the end of the test run."""
-        device = self.parent.parameters.get('device')
-        if device and device.connected:
-            logger.info(f"Disconnecting from device {device.name}")
-            device.disconnect()
+        try:
+            """Disconnect from the device at the end of the test run."""
+            device = self.parent.parameters.get('device')
+            if device and device.connected:
+                logger.info(f"Disconnecting from device {device.name}")
+                device.disconnect()
+        except Exception as e:
+            logger.error(f"Error while disconnecting from the device/s: {e}")
+            self.failed(f"Error while disconnecting from the device/s: {e}")

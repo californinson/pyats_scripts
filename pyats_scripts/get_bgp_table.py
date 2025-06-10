@@ -201,11 +201,15 @@ class BgpTable(aetest.Testcase):
 class CommonCleanup(aetest.CommonCleanup):
     @aetest.subsection
     def disconnect(self):
-        """Disconnect from the device."""
-        device = self.parent.parameters.get('device')
-        if device and device.connected:
-            logger.info(f"Disconnecting from device {device.name}")
-            device.disconnect()
+        try:
+            """Disconnect from the device."""
+            device = self.parent.parameters.get('device')
+            if device and device.connected:
+                logger.info(f"Disconnecting from device {device.name}")
+                device.disconnect()
+        except Exception as e:
+            logger.error(f"Error while disconnecting from the device/s: {e}")
+            self.failed(f"Error while disconnecting from the device/s: {e}")
 
     @aetest.subsection
     def ai_summary_to_text(self):
@@ -228,5 +232,7 @@ class CommonCleanup(aetest.CommonCleanup):
 
             except Exception as e:
                 logger.error(f"Error while saving AI response to text file: {e}")
+                self.failed(f"Error while saving AI response to text file: {e}")
         else:
             logger.warning(f"AI analysis empty.")
+            self.failed(f"AI analysis empty.")
