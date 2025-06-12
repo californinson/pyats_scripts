@@ -65,7 +65,9 @@ class CommonSetup(aetest.CommonSetup):
             "### Role: You are a senior network engineer.\n"
             "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
         )
-        ai_agent = AIAgent(system_prompt=system_prompt)
+        runpod_host=os.environ.get('RUNPOD_HOST') or None
+
+        ai_agent = AIAgent(runpod_host=runpod_host,system_prompt=system_prompt)
         self.parent.parameters.update(ai_agent=ai_agent)
 
     @aetest.subsection
@@ -148,7 +150,8 @@ class BgpTable(aetest.Testcase):
 
             device_user=self.parent.parameters.get('device_user','unknown')
 
-            prompt="Analyse and do a health check of this BGP table."
+            prompt=("Analyse and do a health check of this BGP table. Also check if RTBH is activated for any of the "
+                    "/32 host routes")
 
             #call ai agent generate class to analyse bgp table
             ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,

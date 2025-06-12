@@ -33,7 +33,7 @@ from typing import Dict, List, Tuple
 
 __all__ = ["AIAgent", "AIAgentError"]
 
-RUNPOD_URL_DEFAULT = "http://<runpod-host>:8000"
+RUNPOD_URL_DEFAULT = "http://{runpod_host}:8000"
 DEFAULT_SYSTEM_PROMPT = (
     "### Role: You are a senior network engineer.\n"
     "### Task: Evaluate and summarise network-device output.\n\n"
@@ -56,8 +56,8 @@ class AIAgent:
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, timeout: int = 30, system_prompt: str | None = None) -> None:
-        self.base_url = RUNPOD_URL_DEFAULT.rstrip("/")
+    def __init__(self, *, runpod_host: str | None = None, timeout: int = 30, system_prompt: str | None = None) -> None:
+        self.base_url = self._set_runpod_url(runpod_host).rstrip("/")
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
@@ -67,6 +67,17 @@ class AIAgent:
             h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s – %(message)s"))
             self.logger.addHandler(h)
         self.logger.setLevel(logging.INFO)
+
+    def _set_runpod_url(self,runpod_host: str):
+        global RUNPOD_URL_DEFAULT
+
+        if(runpod_host):
+            RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host)
+
+            return RUNPOD_URL_DEFAULT
+        else:
+            self.logger.error("AI agent host can't be None")
+            raise AIAgentError("Error while adding AI agent host.") from runpod_host
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
         """Compose the final prompt (`system` + user + chunk)."""
