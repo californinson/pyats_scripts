@@ -33,7 +33,7 @@ from typing import Dict, List, Tuple
 
 __all__ = ["AIAgent", "AIAgentError"]
 
-RUNPOD_URL_DEFAULT = "http://{runpod_host}:8000"
+RUNPOD_URL_DEFAULT = "http://{runpod_host}:{runpod_host_port}"
 DEFAULT_SYSTEM_PROMPT = (
     "### Role: You are a senior network engineer.\n"
     "### Task: Evaluate and summarise network-device output.\n\n"
@@ -56,8 +56,8 @@ class AIAgent:
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, runpod_host: str | None = None, timeout: int = 30, system_prompt: str | None = None) -> None:
-        self.base_url = self._set_runpod_url(runpod_host).rstrip("/")
+    def __init__(self, *, runpod_host: str | None = None, runpod_host_port: str | None = None, timeout: int = 30, system_prompt: str | None = None) -> None:
+        self.base_url = self._set_runpod_url(runpod_host, runpod_host_port).rstrip("/")
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
@@ -68,11 +68,11 @@ class AIAgent:
             self.logger.addHandler(h)
         self.logger.setLevel(logging.INFO)
 
-    def _set_runpod_url(self,runpod_host: str):
+    def _set_runpod_url(self, runpod_host: str, runpod_host_port: str):
         global RUNPOD_URL_DEFAULT
 
         if(runpod_host):
-            RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host)
+            RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host, runpod_host_port=runpod_host_port)
 
             return RUNPOD_URL_DEFAULT
         else:
