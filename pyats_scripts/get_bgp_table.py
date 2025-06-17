@@ -232,7 +232,10 @@ class CommonCleanup(aetest.CommonCleanup):
 
         if(final_analysis!= None):
             try:
-                output_dir = getattr(aetest.runtime, "directory", os.getcwd())
+                output_dir = (
+                        getattr(aetest.runtime, "directory", None)  # when run as a job
+                        or os.path.dirname(__file__)  # fallback: script folder
+                )
                 pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
                 summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
