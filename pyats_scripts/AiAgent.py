@@ -86,6 +86,9 @@ class AIAgent:
     def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
         max_tokens = max_tokens or self.MAX_NEW_TOKENS
         url = f"{self.base_url}/generate"
+
+        self.logger.info(f"HTTP LLM API: {url}")
+
         payload = {"prompt": prompt, "max_new_tokens": max_tokens}
 
         self.logger.info("POST %s – len(prompt)=%d, max_tokens=%s", url, len(prompt), max_tokens)
