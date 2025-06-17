@@ -232,16 +232,18 @@ class CommonCleanup(aetest.CommonCleanup):
 
         if(final_analysis!= None):
             try:
-                output_dir = (
-                        getattr(aetest.runtime, "directory", None)  # when run as a job
-                        or os.path.dirname(__file__)  # fallback: script folder
-                )
+                #output_dir = (
+                #        getattr(aetest.runtime, "directory", None)  # when run as a job
+                #        or os.path.dirname(__file__)  # fallback: script folder
+                #)
+                output_dir=os.path.dirname(__file__)
                 pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
                 summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
                 with open(summary_path, "w", encoding="utf-8") as fp:
                     fp.write(final_analysis)
 
+                logger.info("AI summary written to %s", summary_path)
             except Exception as e:
                 logger.error(f"Error while saving AI response to text file: {e}")
                 self.skipped(f"Error while saving AI response to text file: {e}")
