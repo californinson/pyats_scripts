@@ -176,6 +176,7 @@ class BgpTable(aetest.Testcase):
 
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(parsed_output=parsed_output)
+            self.parent.parameters.update(output_dir=self.runtime.directory)
         except Exception as e:
             logger.error(f"Error processing BGP table: {e}")
             # Fail the testcase setup if parsing or execution fails
@@ -232,21 +233,21 @@ class CommonCleanup(aetest.CommonCleanup):
 
         if(final_analysis!= None):
             try:
-                #output_dir = (
-                #        getattr(aetest.runtime, "directory", None)  # when run as a job
-                #        or os.path.dirname(__file__)  # fallback: script folder
-                #)
-                output_dir=os.path.dirname(__file__)
-                #pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+                output_dir = self.parent.parameters.get('output_dir', "")
 
-                summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
-                with open(summary_path, "w", encoding="utf-8") as fp:
-                    fp.write(final_analysis)
+                if(output_dir):
+                    summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
+                    logger.info("AI summary written to %s", summary_path)
 
-                logger.info("AI summary written to %s", summary_path)
+                    with open(summary_path, "w", encoding="utf-8") as fp:
+                        fp.write(final_analysis)
+                else:
+                    logger.warning("Results path not found")
+                    self.skipped("Results path not found")
+
             except Exception as e:
                 logger.error(f"Error while saving AI response to text file: {e}")
                 self.skipped(f"Error while saving AI response to text file: {e}")
         else:
-            logger.warning(f"AI analysis empty.")
+            logger.error(f"AI analysis empty.")
             self.skipped(f"AI analysis empty.")
