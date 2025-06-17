@@ -38,7 +38,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "### Task: Evaluate and summarise network-device output.\n\n"
 )
 
-# in-memory cache  user → device → { "summary": [...] }
+# in-memory cache user → device → { "summary": [...] }
 _DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
 
 
@@ -56,7 +56,7 @@ class AIAgent:
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
     def __init__(self, *, runpod_host: str | None = None, runpod_host_port: str | None = None, timeout: int = 30, system_prompt: str | None = None) -> None:
-        self.base_url = self._set_runpod_url(runpod_host, runpod_host_port).rstrip("/")
+        self.base_url = self._set_runpod_url(runpod_host, runpod_host_port)
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
 
@@ -67,16 +67,17 @@ class AIAgent:
             self.logger.addHandler(h)
         self.logger.setLevel(logging.INFO)
 
-    def _set_runpod_url(self, runpod_host: str, runpod_host_port: str):
-        global RUNPOD_URL_DEFAULT
-
-        if(runpod_host):
-            RUNPOD_URL_DEFAULT=RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host, runpod_host_port=runpod_host_port)
-
-            return RUNPOD_URL_DEFAULT
-        else:
+    def _set_runpod_url(self, runpod_host: str | None, runpod_host_port: int | str | None) -> str:
+        if(not runpod_host):
             self.logger.error("AI agent host can't be None")
-            raise AIAgentError("Error while adding AI agent host.") from runpod_host
+            raise AIAgentError("Error while adding AI agent host.")
+
+        runpod_host_port = runpod_host_port or 8000
+
+        runpod_full_url=f"http://{runpod_host}:{runpod_host_port}"
+
+        return runpod_full_url
+
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
         """Compose the final prompt (`system` + user + chunk)."""

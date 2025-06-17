@@ -66,7 +66,7 @@ class CommonSetup(aetest.CommonSetup):
             "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
         )
         runpod_host=os.environ.get('RUNPOD_HOST') or None
-        runpod_host_port=os.environ.get('RUNPOD_HOST_PORT') or 8000
+        runpod_host_port=os.environ.get('RUNPOD_HOST_PORT') or None
 
         logger.info(f"Setting up AI Agent with http://{runpod_host}:{runpod_host_port}")
 
