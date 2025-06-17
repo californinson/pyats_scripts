@@ -68,6 +68,8 @@ class CommonSetup(aetest.CommonSetup):
         runpod_host=os.environ.get('RUNPOD_HOST') or None
         runpod_host_port=os.environ.get('RUNPOD_HOST_PORT') or 8000
 
+        logger.info(f"Setting up AI Agent with http://{runpod_host}:{runpod_host_port}")
+
         ai_agent = AIAgent(runpod_host=runpod_host, runpod_host_port=runpod_host_port, system_prompt=system_prompt)
         self.parent.parameters.update(ai_agent=ai_agent)
 
