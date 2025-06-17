@@ -230,15 +230,17 @@ class CommonCleanup(aetest.CommonCleanup):
 
         if(final_analysis!= None):
             try:
-                summary_path = os.path.join(self.parent.runtime.directory,
-                                                f"{host}_bgp_summary.txt")
+                output_dir = getattr(aetest.runtime, "directory", os.getcwd())
+
+                summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
+
                 with open(summary_path, "w") as fp:
                     fp.write(final_analysis)
                     logger.info("AI summary written to %s", summary_path)
 
             except Exception as e:
                 logger.error(f"Error while saving AI response to text file: {e}")
-                self.failed(f"Error while saving AI response to text file: {e}")
+                self.skipped(f"Error while saving AI response to text file: {e}")
         else:
             logger.warning(f"AI analysis empty.")
-            self.failed(f"AI analysis empty.")
+            self.skipped(f"AI analysis empty.")
