@@ -237,7 +237,7 @@ class CommonCleanup(aetest.CommonCleanup):
                 #        or os.path.dirname(__file__)  # fallback: script folder
                 #)
                 output_dir=os.path.dirname(__file__)
-                pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+                #pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
                 summary_path = os.path.join(output_dir, f"{host}_bgp_summary.txt")
                 with open(summary_path, "w", encoding="utf-8") as fp:
