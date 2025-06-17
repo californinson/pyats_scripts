@@ -33,7 +33,6 @@ from typing import Dict, List, Tuple
 
 __all__ = ["AIAgent", "AIAgentError"]
 
-RUNPOD_URL_DEFAULT = "http://{runpod_host}:{runpod_host_port}"
 DEFAULT_SYSTEM_PROMPT = (
     "### Role: You are a senior network engineer.\n"
     "### Task: Evaluate and summarise network-device output.\n\n"
@@ -72,7 +71,7 @@ class AIAgent:
         global RUNPOD_URL_DEFAULT
 
         if(runpod_host):
-            RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host, runpod_host_port=runpod_host_port)
+            RUNPOD_URL_DEFAULT=RUNPOD_URL_DEFAULT.format(runpod_host=runpod_host, runpod_host_port=runpod_host_port)
 
             return RUNPOD_URL_DEFAULT
         else:
