@@ -176,8 +176,8 @@ class BgpTable(aetest.Testcase):
 
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(parsed_output=parsed_output)
-            from pyats import aetest
-            output_dir = getattr(aetest.runtime, "directory", os.path.dirname(__file__))
+            output_dir = os.path.join(os.getcwd(), "output")
+            os.makedirs(output_dir, exist_ok=True)
             self.parent.parameters.update(output_dir=output_dir)
         except Exception as e:
             logger.error(f"Error processing BGP table: {e}")
