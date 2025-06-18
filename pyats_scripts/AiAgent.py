@@ -113,7 +113,9 @@ class AIAgent:
             raise AIAgentError("LLM API JSON missing 'output' field")
 
         response = str(data["output"])
-        response = response.split('\n', 1)[-1]  # Keep only the part after the first line
+        if(prompt in response):
+            response=response.replace(prompt,'')
+
         return response.strip()
         #return str(data["output"])
 

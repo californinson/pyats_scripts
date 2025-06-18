@@ -240,7 +240,8 @@ class CommonCleanup(aetest.CommonCleanup):
                     logger.info("AI summary written to %s", summary_path)
 
                     with open(summary_path, "w", encoding="utf-8") as fp:
-                        fp.write(final_analysis)
+                        ai_text="🔎 AI summary\n\n"+final_analysis
+                        fp.write(ai_text)
                 else:
                     logger.warning("Results path not found")
                     self.skipped("Results path not found")
