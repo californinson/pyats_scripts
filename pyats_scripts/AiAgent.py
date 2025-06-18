@@ -67,6 +67,9 @@ class AIAgent:
             self.logger.addHandler(h)
         self.logger.setLevel(logging.INFO)
 
+    def _set_system_prompt(self, system_prompt):
+        self.system_prompt=system_prompt
+
     def _set_runpod_url(self, runpod_host: str | None, runpod_host_port: int | str | None) -> str:
         if(not runpod_host):
             self.logger.error("AI agent host can't be None")
@@ -109,7 +112,10 @@ class AIAgent:
         if "output" not in data:
             raise AIAgentError("LLM API JSON missing 'output' field")
 
-        return str(data["output"])
+        response = str(data["output"])
+        response = response.split('\n', 1)[-1]  # Keep only the part after the first line
+        return response.strip()
+        #return str(data["output"])
 
     # --------------------------------------------------------------------- #
     # cache utilities                                                       #
@@ -156,12 +162,20 @@ class AIAgent:
             return False, msg
 
         try:
+            current_system_prompt=self.system_prompt
+            temporary_system_prompt="### Role: You are a senior network engineer.\n"
+
+            self._set_system_prompt(temporary_system_prompt)
+
             merge_prompt = (
                 "Combine these partial summaries into a single, concise report "
                 "for a network-engineering audience:\n\n"
                 + "\n---\n".join(summaries)
             )
             final = self._request_ai(self._prepare_payload(merge_prompt, ""))
+
+            self._set_system_prompt(current_system_prompt)
+
             return True, final
         except AIAgentError as exc:
             return False, str(exc)
