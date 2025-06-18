@@ -55,7 +55,9 @@ class AIAgent:
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, runpod_host: str | None = None, runpod_host_port: str | None = None, timeout: int = 30, system_prompt: str | None = None) -> None:
+    def __init__(self, *, runpod_host: str | None = None, runpod_host_port: str | None = None,
+                 timeout: int = 30, system_prompt: str | None = None
+    ) -> None:
         self.base_url = self._set_runpod_url(runpod_host, runpod_host_port)
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
