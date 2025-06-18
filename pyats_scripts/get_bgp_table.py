@@ -1,3 +1,4 @@
+from pyats.easypy import runtime
 import logging
 import sys
 from pyats import aetest
@@ -5,7 +6,6 @@ from pyats.topology import loader  # using loader to handle testbed loading if n
 from unicon.core.errors import TimeoutError, StateMachineError, ConnectionError
 import os
 from AiAgent import AIAgent
-import pathlib
 
 # Add custom genie parsers path to the system path
 sys.path.insert(0, 'custom_genie_parsers/')
@@ -176,9 +176,7 @@ class BgpTable(aetest.Testcase):
 
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(parsed_output=parsed_output)
-            output_dir = os.path.join(os.getcwd(), "output")
-            os.makedirs(output_dir, exist_ok=True)
-            self.parent.parameters.update(output_dir=output_dir)
+            self.parent.parameters.update(output_dir=runtime.directory)
         except Exception as e:
             logger.error(f"Error processing BGP table: {e}")
             # Fail the testcase setup if parsing or execution fails
