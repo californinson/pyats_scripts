@@ -86,7 +86,9 @@ class AIAgent:
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
         """Compose the final prompt (`system` + user + chunk)."""
-        return f"{self.system_prompt}{user_prompt}\n\n{chunk}"
+        full_prompt =f"<s>[INST] {self.system_prompt}{user_prompt}\n\n{chunk} [/INST]"
+
+        return full_prompt
 
     def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
         max_tokens = max_tokens or self.MAX_NEW_TOKENS
