@@ -168,19 +168,12 @@ class AIAgent:
             return False, msg
 
         try:
-            current_system_prompt=self.system_prompt
-            temporary_system_prompt="### Role: You are a senior network engineer.\n"
-
-            self._set_system_prompt(temporary_system_prompt)
-
             merge_prompt = (
                 "Combine these partial summaries into a single, concise report "
                 "for a network-engineering audience:\n\n"
                 + "\n---\n".join(summaries)
             )
             final = self._request_ai(self._prepare_payload(merge_prompt, ""))
-
-            self._set_system_prompt(current_system_prompt)
 
             return True, final
         except AIAgentError as exc:
