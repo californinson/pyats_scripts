@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+from ixnetwork_restpy.samples.sessions.linux_sessions import api_key
+
 """AiAgent – helper class that sends device/raw‑output chunks to a language‑model service
 running behind an API service.
 
@@ -55,12 +58,13 @@ class AIAgent:
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, runpod_host: str | None = None, runpod_host_port: str | None = None,
-                 timeout: int = 30, system_prompt: str | None = None
-    ) -> None:
-        self.base_url = self._set_runpod_url(runpod_host, runpod_host_port)
+    def __init__(self, *, ai_host: str | None = None, ai_host_port: str | None = None,
+                 timeout: int = 30, system_prompt: str | dict | None = None, api_key: str | None = None
+                 ) -> None:
+        self.base_url = self._set_ai_host_url(ai_host, ai_host_port)
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        self.api_key=api_key
 
         self.logger = logging.getLogger(self.__class__.__name__)
         if not self.logger.handlers:  # keeps idempotent if the module is re-loaded
@@ -72,36 +76,63 @@ class AIAgent:
     def _set_system_prompt(self, system_prompt):
         self.system_prompt=system_prompt
 
-    def _set_runpod_url(self, runpod_host: str | None, runpod_host_port: int | str | None) -> str:
-        if(not runpod_host):
+    def _set_ai_host_url(self, ai_host: str | None, ai_host_port: int | str | None) -> str:
+        if(not ai_host):
             self.logger.error("AI agent host can't be None")
             raise AIAgentError("Error while adding AI agent host.")
 
-        runpod_host_port = runpod_host_port or 8000
+        ai_host_port = ai_host_port or None
 
-        runpod_full_url=f"http://{runpod_host}:{runpod_host_port}"
+        if(ai_host_port):
+            ai_host_full_url=f"http://{ai_host}:{ai_host_port}"
+        else:
+            ai_host_full_url = f"http://{ai_host}"
 
-        return runpod_full_url
-
+        return ai_host_full_url
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
         """Compose the final prompt (`system` + user + chunk)."""
-        full_prompt =f"<s>[INST] {self.system_prompt}{user_prompt}\n\n{chunk} [/INST]"
+        ai_host=self.base_url
+
+        if("cloudlfare" in ai_host):
+            full_prompt=[
+                self.system_prompt,
+                { "role": "user", "content": user_prompt}
+            ]
+        else:
+            full_prompt =f"<s>[INST] {self.system_prompt}{user_prompt}\n\n{chunk} [/INST]"
 
         return full_prompt
 
     def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
         max_tokens = max_tokens or self.MAX_NEW_TOKENS
-        url = f"{self.base_url}/generate"
+
+        if("cloudflare" in self.base_url):
+            url=self.base_url
+        else:
+            url = f"{self.base_url}/generate"
+
+        api_key=self.api_key
 
         self.logger.info(f"HTTP LLM API: {url}")
 
-        payload = {"prompt": prompt, "max_new_tokens": max_tokens}
+        headers=None
+
+        if(api_key):
+            headers= {f"Authorization": "Bearer {api_key}"}
+
+        if("cloudflare" in self.base_url):
+            payload= { "messages": prompt }
+        else:
+            payload = {"prompt": prompt, "max_new_tokens": max_tokens}
 
         self.logger.info("POST %s – len(prompt)=%d, max_tokens=%s", url, len(prompt), max_tokens)
         start = time.perf_counter()
         try:
-            resp = requests.post(url, json=payload, timeout=self.timeout)
+            if ("cloudflare" in self.base_url):
+                resp = requests.post(url, headers=headers, json=input)
+            else:
+                resp = requests.post(url, json=payload, timeout=self.timeout)
         except requests.RequestException as exc:
             self.logger.error("HTTP error contacting LLM API: %s", exc)
             raise AIAgentError("Network error talking to LLM API") from exc
@@ -113,12 +144,15 @@ class AIAgent:
             raise AIAgentError(f"LLM API returned HTTP {resp.status_code}: {resp.text[:120]}")
 
         data = resp.json()
-        if "output" not in data:
+        if "output" not in data and "cloudflare" not in url:
             raise AIAgentError("LLM API JSON missing 'output' field")
 
-        response = str(data["output"])
-        if(prompt in response):
-            response=response.replace(prompt,'')
+        if("cloudflare" not in url):
+            response = str(data["output"])
+            if(prompt in response):
+                response=response.replace(prompt,'')
+        else:
+            response=str(data['result']['response'])
 
         return response.strip()
         #return str(data["output"])

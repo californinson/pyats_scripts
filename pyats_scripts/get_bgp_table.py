@@ -62,16 +62,25 @@ class CommonSetup(aetest.CommonSetup):
         assert testbed, "Testbed is not provided!"
 
         # create ai agent instance
-        system_prompt=(
+        """system_prompt=(
             "### Role: You are a senior network engineer.\n"
             "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
-        )
-        runpod_host=os.environ.get('RUNPOD_HOST') or None
-        runpod_host_port=os.environ.get('RUNPOD_HOST_PORT') or None
+        )"""
+        system_prompt={ "role": "system", "content": "You are a senior network engineer. "
+                                                     "Evaluate and summarize network output from a Cisco IOS XR "
+                                                     "device using bullet points"
+        }
 
-        logger.info(f"Setting up AI Agent with http://{runpod_host}:{runpod_host_port}")
+        ai_host=os.environ.get('AI_HOST') or None
+        ai_host_port=os.environ.get('AI_HOST_PORT') or None
+        api_key=os.environ.get('API_KEY') or None
 
-        ai_agent = AIAgent(runpod_host=runpod_host, runpod_host_port=runpod_host_port, system_prompt=system_prompt)
+        if(ai_host_port):
+            logger.info(f"Setting up AI Agent with http://{ai_host}:{ai_host_port}")
+        else:
+            logger.info(f"Setting up AI Agent with http://{ai_host}")
+
+        ai_agent = AIAgent(ai_host=ai_host, ai_host_port=ai_host_port, system_prompt=system_prompt, api_key=api_key)
         self.parent.parameters.update(ai_agent=ai_agent)
 
     @aetest.subsection
