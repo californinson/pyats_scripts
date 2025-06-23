@@ -1,8 +1,5 @@
 from __future__ import annotations
-
-from ixnetwork_restpy.samples.sessions.linux_sessions import api_key
-
-"""AiAgent – helper class that sends device/raw‑output chunks to a language‑model service
+"""AiAgent - helper class that sends device/raw‑output chunks to a language‑model service
 running behind an API service.
 
 -------------------------------
