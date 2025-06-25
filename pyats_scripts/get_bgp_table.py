@@ -106,8 +106,8 @@ class CommonSetup(aetest.CommonSetup):
                 logger.info(f"Setting up AI Agent with http://{ai_dict['ai_host']}:{ai_dict['ai_host_port']}")
 
                 ai_agent = AIAgent(
-                    ai_host=ai_dict['ai_host'],
-                    ai_host_port=ai_dict['ai_host_port'],
+                    runpod_host=ai_dict['ai_host'],
+                    runpod_host_port=ai_dict['ai_host_port'],
                     system_prompt=ai_dict['system_prompt']
                 )
             else:
