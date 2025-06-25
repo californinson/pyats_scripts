@@ -112,7 +112,7 @@ class CommonSetup(aetest.CommonSetup):
                 )
             else:
                 if(code==1):
-                    logger.info(f"Setting up AI Agent with Cloudflare http://{ai_dict['ai_host']}")
+                    logger.info(f"Setting up AI Agent with Cloudflare {ai_dict['ai_host']}")
 
                     ai_agent = CloudflareAIAgent(
                         ai_host=ai_dict['ai_host'],

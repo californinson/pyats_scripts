@@ -76,7 +76,7 @@ class CloudflareAIAgent:
             self.logger.error("AI agent host can't be None")
             raise CloudflareAIAgentError("Error while adding AI agent host.")
 
-        ai_host_full_url = f"http://{ai_host}"
+        ai_host_full_url = f"{ai_host}"
 
         return ai_host_full_url
 
