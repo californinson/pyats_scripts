@@ -97,14 +97,12 @@ class CloudflareAIAgent:
 
         self.logger.info(f"HTTPS Cloudflare LLM API: {url}")
 
-        headers=None
-
         headers= {"Authorization": f"Bearer {api_key}"}
 
         self.logger.info("POST %s – len(prompt)=%d", url, len(prompt))
         start = time.perf_counter()
         try:
-            resp = requests.post(url, headers=headers, json=input)
+            resp = requests.post(url, headers=headers, json=prompt)
         except requests.RequestException as exc:
             self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
             raise CloudflareAIAgentError("Network error talking to Cloudflare LLM API") from exc
