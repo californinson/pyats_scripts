@@ -80,7 +80,7 @@ class CloudflareAIAgent:
 
         return ai_host_full_url
 
-    def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
+    def _prepare_payload(self, user_prompt: str, chunk: str) -> List:
         """Compose the final prompt (`system` + user)."""
         full_prompt = [
             self.system_prompt,
@@ -102,7 +102,7 @@ class CloudflareAIAgent:
         self.logger.info("POST %s – len(prompt)=%d", url, len(prompt))
         start = time.perf_counter()
         try:
-            resp = requests.post(url, headers=headers, json={"messages": prompt})
+            resp = requests.post(url, headers=headers, json={"messages": prompt}, timeout=90)
         except requests.RequestException as exc:
             self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
             raise CloudflareAIAgentError("Network error talking to Cloudflare LLM API") from exc
@@ -172,7 +172,7 @@ class CloudflareAIAgent:
             try:
                 merge_prompt = (
                     "Combine these partial summaries into a single, concise report "
-                    "for a network-engineering audience:\n\n"
+                    "for a network-engineering audience. Do not omit important details.\n\n"
                     + "\n---\n".join(summaries)
                 )
                 final = self._request_ai(self._prepare_payload(merge_prompt, ""))
