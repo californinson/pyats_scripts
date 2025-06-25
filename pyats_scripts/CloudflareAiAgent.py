@@ -1,6 +1,6 @@
 from __future__ import annotations
-"""AiAgent - helper class that sends device/raw‑output chunks to a language‑model service
-running behind an API service.
+"""CloudflareAIAgent - helper class that sends device/raw‑output chunks to a language‑model service
+running behind an Cloudflare API service.
 
 -------------------------------
 * PEP‑257‑style doc‑strings and PEP 8 compliant formatting.
@@ -31,34 +31,32 @@ import logging
 import requests
 from typing import Dict, List, Tuple
 
-__all__ = ["AIAgent", "AIAgentError"]
+__all__ = ["CloudflareAIAgent", "CloudflareAIAgentError"]
 
-DEFAULT_SYSTEM_PROMPT = (
-    "### Role: You are a senior network engineer.\n"
-    "### Task: Evaluate and summarise network-device output.\n\n"
-)
+DEFAULT_SYSTEM_PROMPT= {"role": "system", "content": "You are a senior network engineer. "
+                              "Evaluate and summarise network-device output."
+ }
 
 # in-memory cache user → device → { "summary": [...] }
 _DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
 
 
-class AIAgentError(RuntimeError):
+class CloudflareAIAgentError(RuntimeError):
     """Raised when communication with the LLM back-end fails."""
 
 
-class AIAgent:
+class CloudflareAIAgent:
     """Send log chunks to an LLM service and keep the intermediate summaries."""
 
-    CHUNK_CHAR_LEN = 1_500          # ≈ 2 kB – safe for 512 tokens/model-context
-    MAX_NEW_TOKENS = 512
+    CHUNK_CHAR_LEN = 6_144
 
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, ai_host: str | None = None, ai_host_port: str | None = None,
+    def __init__(self, *, ai_host: str | None = None,
                  timeout: int = 30, system_prompt: str | dict | None = None, api_key: str | None = None
                  ) -> None:
-        self.base_url = self._set_ai_host_url(ai_host, ai_host_port)
+        self.base_url = self._set_ai_host_url(ai_host)
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.api_key=api_key
@@ -73,86 +71,55 @@ class AIAgent:
     def _set_system_prompt(self, system_prompt):
         self.system_prompt=system_prompt
 
-    def _set_ai_host_url(self, ai_host: str | None, ai_host_port: int | str | None) -> str:
+    def _set_ai_host_url(self, ai_host: str | None) -> str:
         if(not ai_host):
             self.logger.error("AI agent host can't be None")
-            raise AIAgentError("Error while adding AI agent host.")
+            raise CloudflareAIAgentError("Error while adding AI agent host.")
 
-        ai_host_port = ai_host_port or None
-
-        if(ai_host_port):
-            ai_host_full_url=f"http://{ai_host}:{ai_host_port}"
-        else:
-            ai_host_full_url = f"http://{ai_host}"
+        ai_host_full_url = f"http://{ai_host}"
 
         return ai_host_full_url
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> str:
-        """Compose the final prompt (`system` + user + chunk)."""
-        ai_host=self.base_url
-
-        if("cloudlfare" in ai_host):
-            full_prompt=[
-                self.system_prompt,
-                { "role": "user", "content": user_prompt}
-            ]
-        else:
-            full_prompt =f"<s>[INST] {self.system_prompt}{user_prompt}\n\n{chunk} [/INST]"
+        """Compose the final prompt (`system` + user)."""
+        full_prompt = [
+            self.system_prompt,
+            {"role": "user", "content": user_prompt+'\n\n'+chunk}
+        ]
 
         return full_prompt
 
-    def _request_ai(self, prompt: str, *, max_tokens: int | None = None) -> str:
-        max_tokens = max_tokens or self.MAX_NEW_TOKENS
+    def _request_ai(self, prompt: str) -> str:
 
-        if("cloudflare" in self.base_url):
-            url=self.base_url
-        else:
-            url = f"{self.base_url}/generate"
+        url=self.base_url
 
         api_key=self.api_key
 
-        self.logger.info(f"HTTP LLM API: {url}")
+        self.logger.info(f"HTTPS Cloudflare LLM API: {url}")
 
         headers=None
 
-        if(api_key):
-            headers= {f"Authorization": "Bearer {api_key}"}
+        headers= {"Authorization": f"Bearer {api_key}"}
 
-        if("cloudflare" in self.base_url):
-            payload= { "messages": prompt }
-        else:
-            payload = {"prompt": prompt, "max_new_tokens": max_tokens}
-
-        self.logger.info("POST %s – len(prompt)=%d, max_tokens=%s", url, len(prompt), max_tokens)
+        self.logger.info("POST %s – len(prompt)=%d", url, len(prompt))
         start = time.perf_counter()
         try:
-            if ("cloudflare" in self.base_url):
-                resp = requests.post(url, headers=headers, json=input)
-            else:
-                resp = requests.post(url, json=payload, timeout=self.timeout)
+            resp = requests.post(url, headers=headers, json=input)
         except requests.RequestException as exc:
-            self.logger.error("HTTP error contacting LLM API: %s", exc)
-            raise AIAgentError("Network error talking to LLM API") from exc
+            self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
+            raise CloudflareAIAgentError("Network error talking to Cloudflare LLM API") from exc
 
         rtt = (time.perf_counter() - start) * 1_000
-        self.logger.info("LLM answered HTTP %s in %.1f ms", resp.status_code, rtt)
+        self.logger.info("Cloudflare LLM answered HTTPS %s in %.1f ms", resp.status_code, rtt)
 
         if resp.status_code != 200:
-            raise AIAgentError(f"LLM API returned HTTP {resp.status_code}: {resp.text[:120]}")
+            raise CloudflareAIAgentError(f"Cloudflare LLM API returned HTTPS {resp.status_code}: {resp.text[:120]}")
 
         data = resp.json()
-        if "output" not in data and "cloudflare" not in url:
-            raise AIAgentError("LLM API JSON missing 'output' field")
 
-        if("cloudflare" not in url):
-            response = str(data["output"])
-            if(prompt in response):
-                response=response.replace(prompt,'')
-        else:
-            response=str(data['result']['response'])
+        response=str(data['result']['response'])
 
         return response.strip()
-        #return str(data["output"])
 
     # --------------------------------------------------------------------- #
     # cache utilities                                                       #
@@ -185,7 +152,7 @@ class AIAgent:
                 output = self._request_ai(full_prompt)
                 summaries.append(output)
                 self.logger.debug("Chunk %s → summary %d chars", idx, len(output))
-        except AIAgentError as exc:
+        except CloudflareAIAgentError as exc:
             return False, str(exc)
 
         return True, summaries[-1] if summaries else ""
@@ -198,14 +165,20 @@ class AIAgent:
             self.logger.warning(msg)
             return False, msg
 
-        try:
-            merge_prompt = (
-                "Combine these partial summaries into a single, concise report "
-                "for a network-engineering audience:\n\n"
-                + "\n---\n".join(summaries)
-            )
-            final = self._request_ai(self._prepare_payload(merge_prompt, ""))
+        #If len(summaries)<2 it means the raw output was not chunked as it was less than 6144 characters
+        if(len(summaries)<2):
+            final=''.join(summaries)
 
             return True, final
-        except AIAgentError as exc:
-            return False, str(exc)
+        else:
+            try:
+                merge_prompt = (
+                    "Combine these partial summaries into a single, concise report "
+                    "for a network-engineering audience:\n\n"
+                    + "\n---\n".join(summaries)
+                )
+                final = self._request_ai(self._prepare_payload(merge_prompt, ""))
+
+                return True, final
+            except CloudflareAIAgentError as exc:
+                return False, str(exc)

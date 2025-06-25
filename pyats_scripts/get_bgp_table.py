@@ -5,6 +5,7 @@ from pyats import aetest
 from pyats.topology import loader  # using loader to handle testbed loading if needed
 from unicon.core.errors import TimeoutError, StateMachineError, ConnectionError
 import os
+from CloudflareAiAgent import CloudflareAIAgent
 from AiAgent import AIAgent
 
 # Add custom genie parsers path to the system path
@@ -50,6 +51,40 @@ def fix_ipv6_raw_output(raw_output):
     valid_lines = "\n".join(valid_lines)
     return original_text + '\n' + valid_lines
 
+def ai_agent_choice():
+    ### This function will check what environment variable the user has passed ###
+    ### if the user has chosen to use RunPod, proper Pod and Pod port will be provided ###
+    ### Otherwise Cludflare Worker AI model full URL and Cloudflare API key are  expected ###
+
+    runpod_host = os.environ.get('RUNPOD_HOST') or None
+    runpod_host_port = os.environ.get('RUNPOD_HOST_PORT') or None
+
+    cloudlfare_host = os.environ.get('AI_HOST') or None
+    cloudlfare_api_key = os.environ.get('API_KEY') or None
+
+    if(runpod_host and not cloudlfare_host and runpod_host_port):
+        ai_host=runpod_host
+        ai_host_port=runpod_host_port
+
+        system_prompt = (
+            "### Role: You are a senior network engineer.\n"
+            "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
+        )
+        return 0, {'ai_host':ai_host, 'ai_host_port': ai_host_port, 'system_prompt': system_prompt}
+    else:
+        if(not runpod_host and cloudlfare_host and cloudlfare_api_key):
+            ai_host = cloudlfare_host
+            api_key = cloudlfare_api_key
+
+            system_prompt = {"role": "system", "content": "You are a senior network engineer. "
+                                                          "Evaluate and summarize network output from a Cisco IOS XR "
+                                                          "device using bullet points"
+                             }
+
+            return 1, {'ai_host': ai_host, 'api_key': api_key, 'system_prompt': system_prompt}
+        else:
+            return -1
+
 class CommonSetup(aetest.CommonSetup):
     @aetest.subsection
     def load_system(self, testbed):
@@ -62,25 +97,33 @@ class CommonSetup(aetest.CommonSetup):
         assert testbed, "Testbed is not provided!"
 
         # create ai agent instance
-        """system_prompt=(
-            "### Role: You are a senior network engineer.\n"
-            "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
-        )"""
-        system_prompt={ "role": "system", "content": "You are a senior network engineer. "
-                                                     "Evaluate and summarize network output from a Cisco IOS XR "
-                                                     "device using bullet points"
-        }
+        code, ai_dict=ai_agent_choice()
 
-        ai_host=os.environ.get('AI_HOST') or None
-        ai_host_port=os.environ.get('AI_HOST_PORT') or None
-        api_key=os.environ.get('API_KEY') or None
+        ai_agent = None
 
-        if(ai_host_port):
-            logger.info(f"Setting up AI Agent with http://{ai_host}:{ai_host_port}")
-        else:
-            logger.info(f"Setting up AI Agent with http://{ai_host}")
+        try:
+            if(code==0):
+                logger.info(f"Setting up AI Agent with http://{ai_dict['ai_host']}:{ai_dict['ai_host_port']}")
 
-        ai_agent = AIAgent(ai_host=ai_host, ai_host_port=ai_host_port, system_prompt=system_prompt, api_key=api_key)
+                ai_agent = AIAgent(
+                    ai_host=ai_dict['ai_host'],
+                    ai_host_port=ai_dict['ai_host_port'],
+                    system_prompt=ai_dict['system_prompt']
+                )
+            else:
+                if(code==1):
+                    logger.info(f"Setting up AI Agent with Cloudflare http://{ai_dict['ai_host']}")
+
+                    ai_agent = CloudflareAIAgent(
+                        ai_host=ai_dict['ai_host'],
+                        api_key=ai_dict['api_key'],
+                        system_prompt=ai_dict['system_prompt']
+                    )
+                else:
+                    logger.warning(f"Error while setting up AI Agent. Check env parameters")
+        except Exception as e:
+            logger.warning(f"Error while setting up AI Agent. {e}")
+
         self.parent.parameters.update(ai_agent=ai_agent)
 
     @aetest.subsection
@@ -159,29 +202,32 @@ class BgpTable(aetest.Testcase):
             logger.info(f"Parsed output: {parsed_output}")
 
             #Read ai agent parameter from parent.parameters
-            ai_agent = self.parent.parameters.get('ai_agent')
+            ai_agent = self.parent.parameters.get('ai_agent') or None
 
-            device_user=self.parent.parameters.get('device_user','unknown')
+            if(ai_agent):
+                device_user=self.parent.parameters.get('device_user','unknown')
 
-            prompt=("Analyse and do a health check of this BGP table. Also check if RTBH is activated for any of the "
-                    "/32 host routes")
+                prompt=("Analyse and do a health check of this BGP table. Also check if RTBH is activated for any of the "
+                        "/32 host routes")
 
-            #call ai agent generate class to analyse bgp table
-            ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
-                                                       raw_output=raw_output, prompt=prompt)
-
-            if(ok):
-                ok, final_analysis=ai_agent.get_final_response(device=device.name,user=device_user)
+                #call ai agent generate class to analyse bgp table
+                ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
+                                                           raw_output=raw_output, prompt=prompt)
 
                 if(ok):
-                    logger.info("🔎 AI summary:\n%s", final_analysis)
-                    # Store AI final analysis in parameters for use in cleanup step
-                    self.parent.parameters.update(final_analysis=final_analysis)
+                    ok, final_analysis=ai_agent.get_final_response(device=device.name,user=device_user)
+
+                    if(ok):
+                        logger.info("🔎 AI summary:\n%s", final_analysis)
+                        # Store AI final analysis in parameters for use in cleanup step
+                        self.parent.parameters.update(final_analysis=final_analysis)
+                    else:
+                        logger.error(f"AI analysis failed: {final_analysis}\n")
+                        self.parent.parameters.update(final_analysis=None)
                 else:
-                    logger.error(f"AI analysis failed: {final_analysis}\n")
-                    self.parent.parameters.update(final_analysis=None)
+                    logger.error(f"AI summary failed: {raw_output_summary}\n")
             else:
-                logger.error(f"AI summary failed: {raw_output_summary}\n")
+                logger.warning(f"Error while setting up AI Agent. Check env parameters")
 
             # Store parsed output in parameters for use in test step
             self.parent.parameters.update(parsed_output=parsed_output)
