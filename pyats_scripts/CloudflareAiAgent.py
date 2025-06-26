@@ -34,7 +34,7 @@ from typing import Dict, List, Tuple
 __all__ = ["CloudflareAIAgent", "CloudflareAIAgentError"]
 
 DEFAULT_SYSTEM_PROMPT= {"role": "system", "content": "You are a senior network engineer. "
-                              "Evaluate and summarise network-device output."
+                              "Provide feedback on network-device output."
  }
 
 # in-memory cache user → device → { "summary": [...] }
@@ -171,8 +171,8 @@ class CloudflareAIAgent:
         else:
             try:
                 merge_prompt = (
-                    "Combine these partial summaries into a single, concise report "
-                    "for a network-engineering audience. Do not omit important details.\n\n"
+                    "Combine these summariy/es into a single, concise report "
+                    "for a network-engineering audience. Do not omit important details. Use bullet points.\n\n"
                     + "\n---\n".join(summaries)
                 )
                 final = self._request_ai(self._prepare_payload(merge_prompt, ""))
