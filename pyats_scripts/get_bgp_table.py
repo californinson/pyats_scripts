@@ -68,7 +68,7 @@ def ai_agent_choice():
 
         system_prompt = (
             "### Role: You are a senior network engineer.\n"
-            "### Task: Evaluate and summarize network output from a Cisco IOS XR device using bullet points.\n\n"
+            "### Task: Analyse network output from a Cisco IOS XR device..\n\n"
         )
         return 0, {'ai_host':ai_host, 'ai_host_port': ai_host_port, 'system_prompt': system_prompt}
     else:
@@ -76,9 +76,9 @@ def ai_agent_choice():
             ai_host = cloudlfare_host
             api_key = cloudlfare_api_key
 
-            system_prompt = {"role": "system", "content": "You are a senior network engineer. "
-                                                          "Evaluate and summarize network output from a Cisco IOS XR "
-                                                          "device using bullet points"
+            system_prompt = {"role": "system", "content":
+                "You are a senior network engineer. "
+                "Analyse network output from a Cisco IOS XR device."
                              }
 
             return 1, {'ai_host': ai_host, 'api_key': api_key, 'system_prompt': system_prompt}
@@ -207,8 +207,8 @@ class BgpTable(aetest.Testcase):
             if(ai_agent):
                 device_user=self.parent.parameters.get('device_user','unknown')
 
-                prompt=("Analyse and do a health check of this BGP table. Also check if RTBH is activated for any of the "
-                        "/32 host routes")
+                prompt=("Check this BGP table and highlight. Can you see any active feature? Like for example "
+                        "RTBH for any of the /32 host routes")
 
                 #call ai agent generate class to analyse bgp table
                 ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
