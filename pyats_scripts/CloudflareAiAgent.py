@@ -114,7 +114,7 @@ class CloudflareAIAgent:
             raise CloudflareAIAgentError(f"Cloudflare LLM API returned HTTPS {resp.status_code}: {resp.text[:120]}")
 
         data = resp.json()
-
+        self.logger.info("=== RAW RESPONSE TEXT ===\n%s", resp.text)
         response=str(data['result']['response'])
 
         return response.strip()
