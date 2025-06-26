@@ -103,11 +103,6 @@ class CloudflareAIAgent:
         start = time.perf_counter()
         try:
             resp = requests.post(url, headers=headers, json={"messages": prompt}, timeout=90)
-
-            self.logger.info("Status:", resp.status_code)
-            self.logger.info("Length of response body:", len(resp.text))
-            self.logger.info("Content-Length header:", resp.headers.get("Content-Length"))
-            self.logger.info("Raw body:\n", resp.text[:500])  # trim if long
         except requests.RequestException as exc:
             self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
             raise CloudflareAIAgentError("Network error talking to Cloudflare LLM API") from exc
