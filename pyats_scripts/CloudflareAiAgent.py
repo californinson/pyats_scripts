@@ -89,7 +89,7 @@ class CloudflareAIAgent:
 
         return full_prompt
 
-    def _request_ai(self, prompt: str) -> str:
+    def _request_ai(self, prompt: List) -> str:
 
         url=self.base_url
 
