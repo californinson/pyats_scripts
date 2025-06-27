@@ -83,7 +83,7 @@ def ai_agent_choice():
 
             return 1, {'ai_host': ai_host, 'api_key': api_key, 'system_prompt': system_prompt}
         else:
-            return -1
+            return -1, {}
 
 class CommonSetup(aetest.CommonSetup):
     @aetest.subsection
