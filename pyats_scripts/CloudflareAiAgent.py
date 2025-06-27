@@ -102,6 +102,8 @@ class CloudflareAIAgent:
         self.logger.info("POST %s – len(prompt)=%d", url, len(prompt))
         start = time.perf_counter()
         try:
+            self.logger.info(f"**** PROMPT being sent:\n{prompt}\n")
+
             resp = requests.post(url, headers=headers, json={"messages": prompt}, timeout=90)
         except requests.RequestException as exc:
             self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
