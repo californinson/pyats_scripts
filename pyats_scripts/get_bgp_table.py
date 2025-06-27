@@ -208,7 +208,7 @@ class BgpTable(aetest.Testcase):
                 device_user=self.parent.parameters.get('device_user','unknown')
 
                 prompt=("Analyse this BGP table and provide feedback. Can you see any active feature? Like for example,"
-                        " does any of the /32 host routes have a Null next-hop? (i.e. is being black-holed/RTBH?")
+                        " does any of the /32 host routes have a Null0 next-hop? (i.e. is being black-holed/RTBH?")
 
                 #call ai agent generate class to analyse bgp table
                 ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
