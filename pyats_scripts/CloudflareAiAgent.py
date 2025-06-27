@@ -138,7 +138,7 @@ class CloudflareAIAgent:
         Returns ``(True, last_chunk_summary)`` on success or ``(False, reason)``.
         """
         summaries = self._ensure_cache(user, device)
-        chunks = wrap(raw_output, self.CHUNK_CHAR_LEN)
+        chunks = [raw_output[i:i + self.CHUNK_CHAR_LEN] for i in range(0, len(raw_output), self.CHUNK_CHAR_LEN)]
 
         self.logger.info("Analysing %d chunk(s) for user=%s device=%s", len(chunks), user, device)
 
