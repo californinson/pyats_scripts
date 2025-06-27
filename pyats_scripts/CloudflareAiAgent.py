@@ -97,10 +97,9 @@ class CloudflareAIAgent:
 
         self.logger.info(f"HTTPS Cloudflare LLM API: {url}")
 
-        headers= {
+        headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "User-Agent": "curl/8.1.2"
         }
 
         self.logger.info("POST %s – len(prompt)=%d", url, len(prompt))
