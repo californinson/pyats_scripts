@@ -1,27 +1,28 @@
 from __future__ import annotations
-"""CloudflareAIAgent - helper class that sends device/raw‑output chunks to a language‑model service
-running behind an Cloudflare API service.
+"""
+CloudflareAIAgent - helper class for interacting with the Cloudflare Workers AI service
+using a specific LLM (e.g. Llama-3-8b-instruct) via HTTPS API.
 
--------------------------------
-* PEP‑257‑style doc‑strings and PEP 8 compliant formatting.
-* Introduced the ``AIAgentError`` exception for consistent error handling.
-* Granular **info / warning / error** log messages that callers can follow the
-  request/response life‑cycle in pyATS *TaskLog*.
-* ``generate()`` and ``get_final_response()`` return a **tuple** – ``(ok: bool, payload: str)`` –
-  instead of mutating global state only; the previous behaviour (storing summaries
-  in‑memory) is still kept for convenience.
-* Requests are funnelled through the private ``_request_ai`` helper that validates
-  HTTP status codes, catches connectivity issues and logs the round‑trip latency.
+This module is designed for network test automation scenarios (e.g. via PyATS),
+where large CLI outputs (e.g. BGP tables, configs) are sent to an LLM for summarization.
 
-Usage example
--------------
->>> agent = AIAgent()
->>> ok, _ = agent.generate(device="er11", user="lab", raw_output=device_output)
+------------------------------------------------------
+Key Features:
+* Sends raw device output to the Cloudflare LLM API in character-limited chunks.
+* Uses an in-memory cache to associate AI-generated summaries with user/device.
+* Provides `generate()` to collect summaries, and `get_final_response()` to merge them.
+* Controls output length via `max_tokens=1024` to prevent truncation.
+* Logs API request timing, payloads, and raw responses for traceability.
+
+Usage Example:
+--------------
+>>> agent = CloudflareAIAgent(ai_model="meta/llama-3-8b-instruct", api_key="...")
+>>> ok, _ = agent.generate(device="er11", user="lab", raw_output=cli_output, prompt="Summarise BGP routes")
 >>> if ok:
 ...     ok, summary = agent.get_final_response(device="er11", user="lab")
 ...     print(summary)
-... else:
-...     print("✅ fallback to rule‑based analysis …")
+>>> else:
+...     print("Fallback to rule-based analysis…")
 """
 
 from textwrap import wrap
@@ -48,8 +49,8 @@ class CloudflareAIAgentError(RuntimeError):
 
 
 class CloudflareAIAgent:
-    """Send log chunks to an LLM service and keep the intermediate summaries."""
-
+    # Max number of characters per chunk of CLI output to avoid overly large LLM prompts.
+    # Cloudflare LLM API has a token limit (~8K tokens), but we chunk based on characters.
     CHUNK_CHAR_LEN = 6_144
 
     # --------------------------------------------------------------------- #
@@ -83,7 +84,7 @@ class CloudflareAIAgent:
         return ai_host_full_url
 
     def _prepare_payload(self, user_prompt: str, chunk: str) -> List:
-        """Compose the final prompt (`system` + user)."""
+        """Compose the final prompt with system + user message format required by Cloudflare API."""
         full_prompt = [
             self.system_prompt,
             {"role": "user", "content": user_prompt+'\n\n'+chunk}
@@ -92,7 +93,9 @@ class CloudflareAIAgent:
         return full_prompt
 
     def _request_ai(self, prompt: List) -> str:
-
+        # Send the prompt to Cloudflare's LLM endpoint using HTTPS POST.
+        # Uses a `curl`-style User-Agent to mimic CLI behavior (helps with reliability).
+        # Sets `max_tokens=1024` to ensure full output is returned and not truncated.
         url=self.base_url
 
         api_key=self.api_key
@@ -135,6 +138,7 @@ class CloudflareAIAgent:
     # cache utilities                                                       #
     # --------------------------------------------------------------------- #
     def _ensure_cache(self, user: str, device: str) -> List[str]:
+        # Create or retrieve the in-memory summary cache for a given user/device pair.
         if user not in _DEVICE_CACHE:
             _DEVICE_CACHE[user] = {}
         if device not in _DEVICE_CACHE[user]:
@@ -145,10 +149,8 @@ class CloudflareAIAgent:
     # public API                                                            #
     # --------------------------------------------------------------------- #
     def generate(self, *, device: str, user: str, raw_output: str, prompt: str) -> Tuple[bool, str]:
-        """Send **each chunk** of *raw_output* to the LLM.
-
-        Returns ``(True, last_chunk_summary)`` on success or ``(False, reason)``.
-        """
+        # Split large raw CLI output into character-limited chunks and send each to the LLM.
+        # Each chunk is treated as an independent request for summarization.
         summaries = self._ensure_cache(user, device)
         chunks = [raw_output[i:i + self.CHUNK_CHAR_LEN] for i in range(0, len(raw_output), self.CHUNK_CHAR_LEN)]
 
@@ -168,7 +170,8 @@ class CloudflareAIAgent:
         return True, summaries[-1] if summaries else ""
 
     def get_final_response(self, *, device: str, user: str) -> Tuple[bool, str]:
-        """Ask the LLM to merge the intermediate summaries into a concise report."""
+        # If multiple chunks were summarized, ask the LLM to combine them into a final summary.
+        # Otherwise, return the only chunk summary directly.
         summaries = self._ensure_cache(user, device)
         if not summaries:
             msg = "No intermediate summaries found – call generate() first."
