@@ -171,8 +171,8 @@ class CloudflareAIAgent:
         else:
             try:
                 merge_prompt = (
-                    "Combine these summariy/es into a single, concise report "
-                    "for a network-engineering audience. Do not omit important details. Use bullet points.\n\n"
+                    "Use one or more summaries to combine into a single, concise report "
+                    "for a network-engineering audience. Do not omit important details.\n\n"
                     + "\n---\n".join(summaries)
                 )
                 final = self._request_ai(self._prepare_payload(merge_prompt, ""))
