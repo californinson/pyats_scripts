@@ -114,7 +114,7 @@ class CloudflareAIAgent:
                 "max_tokens": 1024
             }
 
-            resp = requests.post(url, headers=headers, json=inputs, timeout=90)
+            resp = requests.post(url, headers=headers, json=inputs, timeout=90, stream=True)
         except requests.RequestException as exc:
             self.logger.error("HTTPS error contacting Cloudflare LLM API: %s", exc)
             raise CloudflareAIAgentError("Network error talking to Cloudflare LLM API") from exc
