@@ -210,7 +210,7 @@ class BgpTable(aetest.Testcase):
                 prompt=("Analyse this BGP table and provide feedback. Can you see any active feature? Like for example,"
                         " does any of the /32 host routes have a 'Null0' next-hop?"
                         " If so it means RTBH is active for that route and it's being black-holed."
-                        ' Note that Cisco uses next-hop "0.0.0.0" to indicate local routes.')
+                        " Note that Cisco uses next-hop '0.0.0.0' to indicate local routes.")
 
                 #call ai agent generate class to analyse bgp table
                 ok, raw_output_summary=ai_agent.generate(device=device.name,user=device_user,
