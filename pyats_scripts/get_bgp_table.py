@@ -59,7 +59,7 @@ def ai_agent_choice():
     runpod_host = os.environ.get('RUNPOD_HOST') or None
     runpod_host_port = os.environ.get('RUNPOD_HOST_PORT') or None
 
-    cloudlfare_host = os.environ.get('AI_HOST') or None
+    cloudlfare_host = os.environ.get('AI_MODEL') or None
     cloudlfare_api_key = os.environ.get('API_KEY') or None
 
     if(runpod_host and not cloudlfare_host and runpod_host_port):
@@ -73,7 +73,7 @@ def ai_agent_choice():
         return 0, {'ai_host':ai_host, 'ai_host_port': ai_host_port, 'system_prompt': system_prompt}
     else:
         if(not runpod_host and cloudlfare_host and cloudlfare_api_key):
-            ai_host = cloudlfare_host
+            ai_model = cloudlfare_host
             api_key = cloudlfare_api_key
 
             system_prompt = {"role": "system", "content":
@@ -81,7 +81,7 @@ def ai_agent_choice():
                 "Analyse network output from a Cisco IOS XR device."
                              }
 
-            return 1, {'ai_host': ai_host, 'api_key': api_key, 'system_prompt': system_prompt}
+            return 1, {'ai_model': ai_model, 'api_key': api_key, 'system_prompt': system_prompt}
         else:
             return -1, {}
 
@@ -115,7 +115,7 @@ class CommonSetup(aetest.CommonSetup):
                     logger.info(f"Setting up AI Agent with Cloudflare {ai_dict['ai_host']}")
 
                     ai_agent = CloudflareAIAgent(
-                        ai_host=ai_dict['ai_host'],
+                        ai_model=ai_dict['ai_model'],
                         api_key=ai_dict['api_key'],
                         system_prompt=ai_dict['system_prompt']
                     )

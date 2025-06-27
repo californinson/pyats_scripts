@@ -37,6 +37,8 @@ DEFAULT_SYSTEM_PROMPT= {"role": "system", "content": "You are a senior network e
                               "Provide feedback on network-device output."
  }
 
+API_BASE_URL="https://api.cloudflare.com/client/v4/accounts/937f912241bfc6f8bcb7e7b8e1ad3543/ai/run/"
+
 # in-memory cache user → device → { "summary": [...] }
 _DEVICE_CACHE: Dict[str, Dict[str, Dict[str, List[str]]]] = {}
 
@@ -53,10 +55,10 @@ class CloudflareAIAgent:
     # --------------------------------------------------------------------- #
     # constructor & helpers                                                 #
     # --------------------------------------------------------------------- #
-    def __init__(self, *, ai_host: str | None = None,
+    def __init__(self, *, ai_model: str | None = None,
                  timeout: int = 30, system_prompt: str | dict | None = None, api_key: str | None = None
                  ) -> None:
-        self.base_url = self._set_ai_host_url(ai_host)
+        self.base_url = self._set_ai_host_url(ai_model)
         self.timeout = timeout
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.api_key=api_key
@@ -71,12 +73,12 @@ class CloudflareAIAgent:
     def _set_system_prompt(self, system_prompt):
         self.system_prompt=system_prompt
 
-    def _set_ai_host_url(self, ai_host: str | None) -> str:
-        if(not ai_host):
+    def _set_ai_host_url(self, ai_model: str | None) -> str:
+        if(not ai_model):
             self.logger.error("AI agent host can't be None")
             raise CloudflareAIAgentError("Error while adding AI agent host.")
 
-        ai_host_full_url = f"{ai_host}"
+        ai_host_full_url = f"{API_BASE_URL}{ai_model}"
 
         return ai_host_full_url
 
